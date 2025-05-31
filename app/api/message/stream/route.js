@@ -27,30 +27,30 @@ If a user asks questions unrelated to text summarization, politely inform them o
 
 function validateInput(prompt, history) {
   const errors = [];
-  
-  if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+
+  if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
     errors.push("Prompt is required and must be a non-empty string.");
   }
-  
+
   if (prompt && prompt.length > 50000) {
     errors.push("Prompt exceeds maximum length of 50,000 characters.");
   }
-  
+
   if (history && !Array.isArray(history)) {
     errors.push("History must be an array.");
   }
-  
+
   if (history && history.length > 50) {
     errors.push("Chat history is too long. Maximum 50 messages allowed.");
   }
-  
+
   return errors;
 }
 
 function createErrorResponse(message, status = 500, details = null) {
   const errorObj = { error: message };
   if (details) errorObj.details = details;
-  
+
   return new Response(JSON.stringify(errorObj), {
     status,
     headers: { "Content-Type": "application/json" },
@@ -62,14 +62,14 @@ function checkRateLimit(identifier) {
   const now = Date.now();
   const windowMs = 60000;
   const maxRequests = 10;
-  
+
   const requests = rateLimitMap.get(identifier) || [];
-  const validRequests = requests.filter(time => now - time < windowMs);
-  
+  const validRequests = requests.filter((time) => now - time < windowMs);
+
   if (validRequests.length >= maxRequests) {
     return false;
   }
-  
+
   validRequests.push(now);
   rateLimitMap.set(identifier, validRequests);
   return true;
@@ -77,9 +77,12 @@ function checkRateLimit(identifier) {
 
 export async function POST(req) {
   try {
-    const clientId = req.headers.get('x-forwarded-for') || 'anonymous';
+    const clientId = req.headers.get("x-forwarded-for") || "anonymous";
     if (!checkRateLimit(clientId)) {
-      return createErrorResponse("Rate limit exceeded. Please try again later.", 429);
+      return createErrorResponse(
+        "Rate limit exceeded. Please try again later.",
+        429,
+      );
     }
 
     if (!process.env.GEMINI_API_KEY) {
@@ -102,7 +105,7 @@ export async function POST(req) {
     const model = genAI.getGenerativeModel({
       model: CONFIG.MODEL_NAME,
       systemInstruction: {
-        parts: [{ text: SYSTEM_INSTRUCTION_TEXT }]
+        parts: [{ text: SYSTEM_INSTRUCTION_TEXT }],
       },
       generationConfig: {
         maxOutputTokens: CONFIG.MAX_TOKENS,
@@ -123,7 +126,7 @@ export async function POST(req) {
     });
 
     const chatHistory = (history || [])
-      .filter(item => item && item.role && item.text)
+      .filter((item) => item && item.role && item.text)
       .slice(-20)
       .map((item) => ({
         role: item.role === "ai" ? "model" : "user",
@@ -132,8 +135,8 @@ export async function POST(req) {
 
     const generationArgs = {
       contents: [
-        ...chatHistory, 
-        { role: "user", parts: [{ text: prompt.trim() }] }
+        ...chatHistory,
+        { role: "user", parts: [{ text: prompt.trim() }] },
       ],
       systemInstruction: {
         parts: [{ text: SYSTEM_INSTRUCTION_TEXT }],
@@ -146,7 +149,7 @@ export async function POST(req) {
       async start(controller) {
         const encoder = new TextEncoder();
         let hasStarted = false;
-        
+
         try {
           for await (const chunk of stream.stream) {
             if (!hasStarted) {
@@ -154,24 +157,24 @@ export async function POST(req) {
               const startData = `data: ${JSON.stringify({ status: "started" })}\n\n`;
               controller.enqueue(encoder.encode(startData));
             }
-            
+
             if (chunk?.text) {
-              const text = typeof chunk.text === "function" ? chunk.text() : chunk.text;
+              const text =
+                typeof chunk.text === "function" ? chunk.text() : chunk.text;
               if (text && text.trim()) {
                 const sseFormattedData = `data: ${JSON.stringify({ text })}\n\n`;
                 controller.enqueue(encoder.encode(sseFormattedData));
               }
             }
           }
-          
+
           const endData = `data: ${JSON.stringify({ status: "completed" })}\n\n`;
           controller.enqueue(encoder.encode(endData));
-          
         } catch (streamError) {
           console.error("Streaming error:", streamError);
-          const sseError = `data: ${JSON.stringify({ 
+          const sseError = `data: ${JSON.stringify({
             error: "Error processing stream from AI.",
-            details: streamError.message 
+            details: streamError.message,
           })}\n\n`;
           controller.enqueue(encoder.encode(sseError));
         } finally {
@@ -187,24 +190,26 @@ export async function POST(req) {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache, no-store, must-revalidate",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
         "X-Accel-Buffering": "no",
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "POST",
         "Access-Control-Allow-Headers": "Content-Type",
       },
     });
-
   } catch (error) {
     console.error("API Error:", error);
-    
+
     let errorMessage = "Internal Server Error";
     let statusCode = 500;
-    
+
     if (error.message?.includes("API key not valid")) {
       errorMessage = "Invalid API Key. Please check your configuration.";
       statusCode = 401;
-    } else if (error.status === 404 || error.message?.includes("Could not find model")) {
+    } else if (
+      error.status === 404 ||
+      error.message?.includes("Could not find model")
+    ) {
       errorMessage = `Model '${CONFIG.MODEL_NAME}' not found. Ensure it's available for your API key.`;
       statusCode = 404;
     } else if (error.status === 429) {

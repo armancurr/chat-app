@@ -4,8 +4,8 @@ import { ibmPlexSans, ibmPlexMono } from "@/app/fonts";
 export const metadata = {
   title: "Better Chat - Fast Summarization",
   icons: {
-    icon: "/images/converted.ico",
-    shortcut: "/images/converted.ico",
+    icon: "/images/converted.png",
+    shortcut: "/images/converted.png",
   },
   description:
     "Better Chat is an AI-powered chatbot that allows you to chat with your data.",
